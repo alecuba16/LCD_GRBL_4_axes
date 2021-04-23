@@ -1,5 +1,5 @@
 # 
-This is an offline controller for a CNC machine with GRBL V1.1.
+This is an offline controller for a CNC machine with GRBL V1.1. (4 axes version)
 
 It executes the basic functions, such as:\
 -Displaying the status of the machine \
