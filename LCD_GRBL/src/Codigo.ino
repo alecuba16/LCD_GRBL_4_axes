@@ -71,10 +71,13 @@ LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 20 char
 //Encoder
 Encoder myEnc(clkPin, dtPin);
 
-// Globals
-char WposX[9];            // last known X pos on workpiece, space for 9 characters ( -999.999\0 )
+// Globals space for 9 characters ( -999.999\0 )
+char WposX[9];            // last known X pos on workpiece
 char WposY[9];            // last known Y pos on workpiece
-char WposZ[9];            // last known Z heighton workpiece, space for 8 characters is enough( -99.999\0 )
+char WposZ[9];            // last known Z pos on workpiece
+char WposA[9];            // last known A pos on workpiece
+char WposB[9];            // last known B pos on workpiece
+char WposC[9];            // last known C pos on workpiece
 
 char machineStatus[10];   // last know state (Idle, Run, Hold, Door, Home, Alarm, Check)
 
@@ -101,14 +104,14 @@ void setup() {
   pinMode(selectPin, INPUT_PULLUP);
 
   // Ask to connect (you might still use a computer and NOT connect this controller)
-  setTextDisplay(F("   Connect to CNC?"), "", F("    LCD GRBL v1.1"), F(" By Carlos Guerrero"));
+  setTextDisplay(F("   Connect to CNC?"), "", F("    LCD GRBL v1.1 (6 Axes) for grbl-Mega-5X"), F(" By Alejandro Blanco-M"));
   while (digitalRead(selectPin)) {}  // wait for the button to be pressed
   delay(50);
   while (digitalRead(selectPin) == LOW) {} // Wait for the button to be released
   delay(50);
   // Serial1 connections
   Serial.begin(115200);
-  Serial.println(F("LCD GRBL, 1.0"));
+  Serial.println(F("LCD GRBL, 1.1 (6 Axes) for grbl-Mega-5X"));
   byte baudRate = EEPROM.read(0);
   switch (baudRate) {
     case 1:
@@ -168,8 +171,8 @@ byte fileMenu() {
 
     while (millis() - timeWithOutPress <= timeExit) {
       long newPosition = myEnc.read();
-      byte diferencia = abs(newPosition - oldPosition);
-      if (fileindex < fc && newPosition > oldPosition && diferencia != 3) { // down!
+      byte diff = abs(newPosition - oldPosition);
+      if (fileindex < fc && newPosition > oldPosition && diff != 3) { // down!
         fileindex++;
         timeWithOutPress = millis();
         fn = getFileName(fileindex);
@@ -180,7 +183,7 @@ byte fileMenu() {
         }
       }
 
-      if (newPosition < oldPosition && diferencia != 3) { // up!
+      if (newPosition < oldPosition && diff != 3) { // up!
         if (fileindex > 1) {
           fileindex--;
           timeWithOutPress = millis();
@@ -233,12 +236,12 @@ void moveMenu(char axis, float distance) {
 
   while (MoveCommand != "-1") {
     long newPosition = myEnc.read();
-    byte diferencia = abs(newPosition - oldPosition);
+    byte diff = abs(newPosition - oldPosition);
     MoveCommand = "";
     // read the state of all inputs
 
-    if (newPosition > oldPosition && diferencia != 3) MoveCommand = InitialCommand + axis + distance / 10 + SpeedCommand;
-    else if (newPosition < oldPosition && diferencia != 3) MoveCommand = InitialCommand + axis + (-distance / 10) + SpeedCommand;
+    if (newPosition > oldPosition && diff != 3) MoveCommand = InitialCommand + axis + distance / 10 + SpeedCommand;
+    else if (newPosition < oldPosition && diff != 3) MoveCommand = InitialCommand + axis + (-distance / 10) + SpeedCommand;
 
     if (MoveCommand != "") {
       // send the commands
@@ -382,7 +385,7 @@ void sendFile(byte fileIndex) {
   // Set the Work Position to zero
   sendCodeLine(F("G90"), true); // absolute coordinates
   sendCodeLine(F("G21"), true);
-  //sendCodeLine(F("G92 X0 Y0 Z0"),true);  // set zero
+  //sendCodeLine(F("G92 X0 Y0 Z0 A0 B0 C0"),true);  // set zero
   clearRXBuffer();
 
   // reset the timer
@@ -475,15 +478,15 @@ void modMenu() {
   }
   if (millis() - lastButtonCheck >= timeDelay) {
     long newPosition = myEnc.read();
-    byte diferencia = abs(newPosition - oldPosition);
+    byte diff = abs(newPosition - oldPosition);
     if (!modFeed && !modSpindle) {
-      if (newPosition > oldPosition && diferencia != 3) {  // Press the button
+      if (newPosition > oldPosition && diff != 3) {  // Press the button
         lastButtonCheck = millis();
         if (optionSelectMod < 5) optionSelectMod++;
         if (optionSelectMod > 3) setTextDisplay("", table[optionSelectMod - 3], table[optionSelectMod - 2], table[optionSelectMod - 1]);
         moveOption(optionSelectMod);
       }
-      else if (newPosition < oldPosition && diferencia != 3) {  // Press the button
+      else if (newPosition < oldPosition && diff != 3) {  // Press the button
         lastButtonCheck = millis();
         if (optionSelectMod > 1) optionSelectMod--;
         if (optionSelectMod >= 3) setTextDisplay("", table[optionSelectMod - 3], table[optionSelectMod - 2], table[optionSelectMod - 1]);
@@ -541,13 +544,13 @@ void modMenu() {
           lcd.print(varMod);  lcd.print(F("% "));
         }
       }
-      if (newPosition > oldPosition && diferencia != 3) {
+      if (newPosition > oldPosition && diff != 3) {
         lastButtonCheck = millis();
         if (varMod < 200) varMod += 10;
         if (modFeed) Serial1.write(145); //0x91
         else Serial1.write(154); //0x9A
       }
-      else if (newPosition < oldPosition && diferencia != 3) {
+      else if (newPosition < oldPosition && diff != 3) {
         lastButtonCheck = millis();
         if (varMod > 10) varMod -= 10;
         if (modFeed) Serial1.write(146); //0x91
@@ -601,24 +604,45 @@ void updateDisplayStatus(unsigned long runtime) {
   lcd.print(machineStatus);
   lcd.print(F(" "));
   if (runtime == 1) {
-    lcd.setCursor(0, 3);
-    lcd.print(F("Status Machine Wpos"));
+    lcd.setCursor(6, 0);
+    lcd.print(F("Wpos"));
   }
   else if (runtime > 3) {
+    lcd.setCursor(6, 0);
     lcd.print(timeString);
     lcd.print(F("  "));
   }
 
   lcd.setCursor(0, 1);
-  lcd.print(F("X:"));  lcd.print(WposX); lcd.print(F("  "));
+  lcd.print(F("X:"));  lcd.print(WposX);
+  if (strlen(WposX) == 6)lcd.print(F(" "));
+  else if (strlen(WposX) == 5) lcd.print(F("  "));
 
-  lcd.setCursor(11, 1);
+  lcd.setCursor(10, 1);
   lcd.print(F("Y:"));  lcd.print(WposY);
   if (strlen(WposY) == 6)lcd.print(F(" "));
   else if (strlen(WposY) == 5) lcd.print(F("  "));
 
-  lcd.setCursor(5, 2);
-  lcd.print(F("Z:"));  lcd.print(WposZ); lcd.print(F("  "));
+  lcd.setCursor(0, 2);
+  lcd.print(F("Z:"));  lcd.print(WposZ);
+  if (strlen(WposZ) == 6)lcd.print(F(" "));
+  else if (strlen(WposZ) == 5) lcd.print(F("  "));
+
+  lcd.setCursor(10, 2);
+  lcd.print(F("A:"));  lcd.print(WposA);
+  if (strlen(WposA) == 6)lcd.print(F(" "));
+  else if (strlen(WposA) == 5) lcd.print(F("  "));
+
+  lcd.setCursor(0, 3);
+  lcd.print(F("B:"));  lcd.print(WposB);
+  if (strlen(WposB) == 6)lcd.print(F(" "));
+  else if (strlen(WposB) == 5) lcd.print(F("  "));
+
+  lcd.setCursor(10, 3);
+  lcd.print(F("C:"));  lcd.print(WposC);
+  if (strlen(WposC) == 6)lcd.print(F(" "));
+  else if (strlen(WposC) == 5) lcd.print(F("  "));  
+
 }
 
 void resetSDReader() {
@@ -672,18 +696,18 @@ void clearRXBuffer() {
 
 String ignoreUnsupportedCommands(String lineOfCode) {
   /*
-    Remove unsupported codes, either because they are unsupported by GRBL.
+    Remove unsupported codes, either because they are unsupported by GRBL. EDIT: Those non-modal commands are supported!! -> https://github.com/gnea/grbl/wiki/Grbl-v1.1-Commands
   */
-  removeIfExists(lineOfCode, F("G4"));
-  removeIfExists(lineOfCode, F("G10 L2"));
-  removeIfExists(lineOfCode, F("G10 l20"));
-  removeIfExists(lineOfCode, F("G28"));
-  removeIfExists(lineOfCode, F("G30"));
-  removeIfExists(lineOfCode, F("G28.1"));
-  removeIfExists(lineOfCode, F("G30.1"));
-  removeIfExists(lineOfCode, F("G53"));
-  removeIfExists(lineOfCode, F("G92"));
-  removeIfExists(lineOfCode, F("G92.1"));
+  //removeIfExists(lineOfCode, F("G4"));
+  //removeIfExists(lineOfCode, F("G10 L2"));
+  //removeIfExists(lineOfCode, F("G10 l20"));
+  //removeIfExists(lineOfCode, F("G28"));
+  //removeIfExists(lineOfCode, F("G30"));
+  //removeIfExists(lineOfCode, F("G28.1"));
+  //removeIfExists(lineOfCode, F("G30.1"));
+  //removeIfExists(lineOfCode, F("G53"));
+  //removeIfExists(lineOfCode, F("G92"));
+  //removeIfExists(lineOfCode, F("G92.1"));
 
   // Ignore comment lines
   // Ignore tool commands, I do not support tool changers
@@ -725,7 +749,7 @@ void getStatus() {
     This gets the status of the machine
     The status message of the machine might look something like this (this is a worst scenario message)
     The max length of the message is 72 characters long (including carriage return).
-    <Idle|WPos:0.000,0.000,0.000|FS:0,0>
+    <Idle|WPos:0.000,0.000,0.000,0.000,0.000,0.000|FS:0,0>
   */
 
   char content[80];
@@ -760,6 +784,8 @@ void getStatus() {
   if (!completeMessage) {
     return;
   }
+
+  //TODO replace this ugly code with REGEX library.
   Serial.println(content);
   i++;
   while (c < 9 && content[i] != '|') {
@@ -778,19 +804,34 @@ void getStatus() {
     WposY[c] = 0;
   }
   c = 0; i++;
-  while (c < 8 && content[i] != '|') {
+  while (c < 8 && content[i] != ',') {
     WposZ[c++] = content[i++];  // get WposZ
     WposZ[c] = 0;
   }
-  if (WposZ[0] == '-')
+  c = 0; i++;
+  while (c < 8 && content[i] != ',') {
+    WposA[c++] = content[i++];  // get WposA
+    WposA[c] = 0;
+  }
+  c = 0; i++;
+  while (c < 8 && content[i] != ',') {
+    WposB[c++] = content[i++];  // get WposB
+    WposB[c] = 0;
+  }
+  c = 0; i++;
+  while (c < 8 && content[i] != '|') {
+    WposC[c++] = content[i++];  // get WposC
+    WposC[c] = 0;
+  }
+  if (WposC[0] == '-')
   {
-    WposZ[5] = '0';
-    WposZ[6] = 0;
+    WposC[5] = '0';
+    WposC[6] = 0;
   }
   else
   {
-    WposZ[4] = '0';
-    WposZ[5] = 0;
+    WposC[4] = '0';
+    WposC[5] = 0;
   }
 }
 
@@ -802,13 +843,13 @@ void menuP() {
   while (millis() - timeWithOutPress <= timeExit) {
     long newPosition = myEnc.read();
 
-    byte diferencia = abs(newPosition - oldPosition);
-    if (newPosition > oldPosition && diferencia != 3) {  // Press the button
+    byte diff = abs(newPosition - oldPosition);
+    if (newPosition > oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
       if (optionSelect < 3) optionSelect++;
       moveOption(optionSelect);
     }
-    else if (newPosition < oldPosition && diferencia != 3) {  // Press the button
+    else if (newPosition < oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
       if (optionSelect > 1) optionSelect--;
       moveOption(optionSelect);
@@ -846,14 +887,14 @@ void controlMenu() {
   moveOption(optionSelect);
   while (millis() - timeWithOutPress <= timeExit) {
     long newPosition = myEnc.read();
-    byte diferencia = abs(newPosition - oldPosition);
-    if (newPosition > oldPosition && diferencia != 3) {  // Press the button
+    byte diff = abs(newPosition - oldPosition);
+    if (newPosition > oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
       if (optionSelect < 6) optionSelect++;
       if (optionSelect > 3) setTextDisplay("", table[optionSelect - 3], table[optionSelect - 2], table[optionSelect - 1]);
       moveOption(optionSelect);
     }
-    else if (newPosition < oldPosition && diferencia != 3) {  // Press the button
+    else if (newPosition < oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
       if (optionSelect > 1) optionSelect--;
       if (optionSelect >= 3) setTextDisplay("", table[optionSelect - 3], table[optionSelect - 2], table[optionSelect - 1]);
@@ -869,18 +910,18 @@ void controlMenu() {
         case 2:
           homing = true;
           sendCodeLine(F("$H"), true);
-          sendCodeLine(F("G10 P0 L20 X0 Y0 Z0"), true);
+          sendCodeLine(F("G10 P0 L20 X0 Y0 Z0 A0 B0 C0"), true);
           homing = false;
           break;
         case 3:
           menuMoveAxis();
           break;
         case 4:
-          sendCodeLine(F("G10 P0 L20 X0 Y0 Z0"), true);
+          sendCodeLine(F("G10 P0 L20 X0 Y0 Z0 A0 B0 C0"), true);
           break;
         case 5:
           sendCodeLine(F("G90 G0 X0 Y0"), true);
-          sendCodeLine(F("G90 G0 Z0"), true);
+          sendCodeLine(F("G90 G0 Z0 A0 B0 C0"), true);
           break;
         case 6:
           setTextDisplay(F(" "), F("     Coming"), F("      Soon"), F(" "));
@@ -903,13 +944,13 @@ void menuMoveAxis() {
   moveOption(optionSelect);
   while (millis() - timeWithOutPress <= timeExit) {
     long newPosition = myEnc.read();
-    byte diferencia = abs(newPosition - oldPosition);
-    if (newPosition > oldPosition && diferencia != 3) {  // Press the button
+    byte diff = abs(newPosition - oldPosition);
+    if (newPosition > oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
       if (optionSelect < 3) optionSelect++;
       moveOption(optionSelect);
     }
-    else if (newPosition < oldPosition && diferencia != 3) {  // Press the button
+    else if (newPosition < oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
       if (optionSelect > 1) optionSelect--;
       moveOption(optionSelect);
@@ -942,18 +983,20 @@ void setAxisToMove(byte distance) {
   timeWithOutPress = millis();
   byte optionSelect = 1;
   float d = float(distance / 10.0);
-  setTextDisplay("    Move " + (String)d + " mm", F("  Move X"), F("  Move Y"), F("  Move Z"));
+  setTextDisplay("    Move " + (String)d + " mm", F("  Move X " + (String)d + " mm"), F("  Move Y"), F("  Move Z"));
   moveOption(optionSelect);
   while (millis() - timeWithOutPress <= timeExit) {
     long newPosition = myEnc.read();
-    byte diferencia = abs(newPosition - oldPosition);
-    if (newPosition > oldPosition && diferencia != 3) {  // Press the button
+    byte diff = abs(newPosition - oldPosition);
+    if (newPosition > oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
+      if (optionSelect > 4) setTextDisplay("",F("  Move A"), F("  Move B"), F("  Move C"));
       if (optionSelect < 3) optionSelect++;
       moveOption(optionSelect);
     }
-    else if (newPosition < oldPosition && diferencia != 3) {  // Press the button
+    else if (newPosition < oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
+      if (optionSelect < 4) setTextDisplay("    Move " + (String)d + " mm", F("  Move X " + (String)d + " mm"), F("  Move Y"), F("  Move Z"));
       if (optionSelect > 1) optionSelect--;
       moveOption(optionSelect);
     }
@@ -969,6 +1012,15 @@ void setAxisToMove(byte distance) {
           break;
         case 3:
           moveMenu('Z', distance);
+          break;
+        case 4:
+          moveMenu('A', distance);
+          break;
+        case 5:
+          moveMenu('B', distance);
+          break;
+        case 6:
+          moveMenu('C', distance);
           break;
       }
       break;
@@ -991,14 +1043,14 @@ void settingMenu() {
 
   while (millis() - timeWithOutPress <= timeExit) {
     long newPosition = myEnc.read();
-    byte diferencia = abs(newPosition - oldPosition);
-    if (newPosition > oldPosition && diferencia != 3) {  // Press the button
+    byte diff = abs(newPosition - oldPosition);
+    if (newPosition > oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
       if (optionSelect < 5) optionSelect++;
       if (optionSelect > 3) setTextDisplay("", table[optionSelect - 3], table[optionSelect - 2], table[optionSelect - 1]);
       moveOption(optionSelect);
     }
-    else if (newPosition < oldPosition && diferencia != 3) {  // Press the button
+    else if (newPosition < oldPosition && diff != 3) {  // Press the button
       timeWithOutPress = millis();
       if (optionSelect > 1) optionSelect--;
       if (optionSelect >= 3) setTextDisplay("", table[optionSelect - 3], table[optionSelect - 2], table[optionSelect - 1]);
