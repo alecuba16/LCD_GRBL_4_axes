@@ -2,11 +2,12 @@
   This code is based on the project found at "https://github.com/bvenneker/Arduino-GCode-Sender",
   by the user Bart Venneker. You can go to the link to see the original project.
   Thanks to him for sharing the code under a free license.
-  Origanl Version 15-10-2017.002
+  Original Version 15-10-2017.002
 
-  This code was updated by Carlos Guerrero.
-  03/05/2020
-  v1.0
+  Also it is a modification based on the modifications of Carlos Guerrero.
+
+    23/04/2021
+  v0.1b
 
   Hardware
   Arduino MEGA
