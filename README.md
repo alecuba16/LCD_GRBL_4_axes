@@ -1,6 +1,8 @@
 # 
 This is an offline controller for a CNC machine with GRBL V1.1. (6 axes version)
 
+Use with https://github.com/fra589/grbl-Mega-5X
+
 It executes the basic functions, such as:\
 -Displaying the status of the machine \
 -Move the axes \
